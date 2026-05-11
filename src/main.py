@@ -35,31 +35,42 @@ def detect_frame(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
     # color range
-    lower_red1 = np.array([0,100,100])
+    lower_red1 = np.array([0,120,80])
     upper_red1 = np.array([10,255,255])
-    lower_red2 = np.array([160,100,100])
+    lower_red2 = np.array([160,120,80])
     upper_red2 = np.array([180,255,255])
     lower_green = np.array([40,50,50])
     upper_green = np.array([90,255,255])
-    lower_yellow = np.array([15,150,150])
+    # Supplemental range for overexposed green lights (low S, high V)
+    lower_green_wash = np.array([30,15,170])
+    upper_green_wash = np.array([95,120,255])
+    lower_yellow = np.array([15,150,100])
     upper_yellow = np.array([35,255,255])
     mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     maskg = cv2.inRange(hsv, lower_green, upper_green)
+    maskg_wash = cv2.inRange(hsv, lower_green_wash, upper_green_wash)
+    maskg = cv2.bitwise_or(maskg, maskg_wash)
     masky = cv2.inRange(hsv, lower_yellow, upper_yellow)
     maskr = cv2.add(mask1, mask2)
+
+    # morphological closing to remove noise
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    maskr = cv2.morphologyEx(maskr, cv2.MORPH_CLOSE, kernel)
+    maskg = cv2.morphologyEx(maskg, cv2.MORPH_CLOSE, kernel)
+    masky = cv2.morphologyEx(masky, cv2.MORPH_CLOSE, kernel)
 
     size = img.shape
 
     # hough circle detect
     r_circles = cv2.HoughCircles(maskr, cv2.HOUGH_GRADIENT, 1, 80,
-                               param1=50, param2=10, minRadius=0, maxRadius=30)
+                               param1=50, param2=12, minRadius=2, maxRadius=40)
 
-    g_circles = cv2.HoughCircles(maskg, cv2.HOUGH_GRADIENT, 1, 60,
-                                 param1=50, param2=10, minRadius=0, maxRadius=30)
+    g_circles = cv2.HoughCircles(maskg, cv2.HOUGH_GRADIENT, 1, 70,
+                                 param1=50, param2=9, minRadius=2, maxRadius=40)
 
     y_circles = cv2.HoughCircles(masky, cv2.HOUGH_GRADIENT, 1, 30,
-                                 param1=50, param2=5, minRadius=0, maxRadius=30)
+                                 param1=50, param2=7, minRadius=2, maxRadius=40)
 
     # traffic light detect
     r = 5
@@ -81,7 +92,7 @@ def detect_frame(img):
                         continue
                     h += maskr[yy, xx]
                     s += 1
-            if s > 0 and h / s > 50:
+            if s > 0 and h / s > 60:
                 cv2.circle(cimg, (xi, yi), ri+10, (0, 255, 0), 2)
                 cv2.circle(maskr, (xi, yi), ri+30, (255, 255, 255), 2)
                 cv2.putText(cimg,'RED',(xi, yi), font, 1,(255,0,0),2,cv2.LINE_AA)
@@ -125,7 +136,7 @@ def detect_frame(img):
                         continue
                     h += masky[yy, xx]
                     s += 1
-            if s > 0 and h / s > 50:
+            if s > 0 and h / s > 65:
                 cv2.circle(cimg, (xi, yi), ri+10, (0, 255, 0), 2)
                 cv2.circle(masky, (xi, yi), ri+30, (255, 255, 255), 2)
                 cv2.putText(cimg,'YELLOW',(xi, yi), font, 1,(255,0,0),2,cv2.LINE_AA)
@@ -134,8 +145,10 @@ def detect_frame(img):
 
 if __name__ == '__main__':
     cap = cv2.VideoCapture(0)
+
     if not cap.isOpened():
         print("Failed to open camera")
+
     else:
         while True:
             ret, frame = cap.read()
