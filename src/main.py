@@ -10,14 +10,28 @@ import numpy as np
 
 
 def detect(filepath, file):
-
+    # Backwards-compatible file-based entrypoint: read image and delegate
     font = cv2.FONT_HERSHEY_SIMPLEX
     img_path = os.path.join(filepath, file)
     img = cv2.imread(img_path)
     if img is None:
         print("Failed to load image:", img_path)
         return
-    cimg = img
+
+    cimg = detect_frame(img)
+
+    result_dir = os.path.join(filepath, 'result')
+    os.makedirs(result_dir, exist_ok=True)
+    cv2.imwrite(os.path.join(result_dir, file), cimg)
+    cv2.imshow('detected results', cimg)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+def detect_frame(img):
+    """Run detection on a BGR image (frame). Returns annotated image."""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cimg = img.copy()
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
     # color range
@@ -27,8 +41,6 @@ def detect(filepath, file):
     upper_red2 = np.array([180,255,255])
     lower_green = np.array([40,50,50])
     upper_green = np.array([90,255,255])
-    # lower_yellow = np.array([15,100,100])
-    # upper_yellow = np.array([35,255,255])
     lower_yellow = np.array([15,150,150])
     upper_yellow = np.array([35,255,255])
     mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
@@ -38,7 +50,6 @@ def detect(filepath, file):
     maskr = cv2.add(mask1, mask2)
 
     size = img.shape
-    # print size
 
     # hough circle detect
     r_circles = cv2.HoughCircles(maskr, cv2.HOUGH_GRADIENT, 1, 80,
@@ -119,23 +130,34 @@ def detect(filepath, file):
                 cv2.circle(masky, (xi, yi), ri+30, (255, 255, 255), 2)
                 cv2.putText(cimg,'YELLOW',(xi, yi), font, 1,(255,0,0),2,cv2.LINE_AA)
 
-    cv2.imshow('detected results', cimg)
-    result_dir = os.path.join(filepath, 'result')
-    os.makedirs(result_dir, exist_ok=True)
-    cv2.imwrite(os.path.join(result_dir, file), cimg)
-    # cv2.imshow('maskr', maskr)
-    # cv2.imshow('maskg', maskg)
-    # cv2.imshow('masky', masky)
-
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    return cimg
 
 if __name__ == '__main__':
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Failed to open camera")
+    else:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Failed to capture video")
+                break
+            annotated = detect_frame(frame)
+            cv2.imshow('detected results', annotated)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:
+                break
+    cap.release()
+    cv2.destroyAllWindows()
 
-    # path = os.path.abspath('..')+'\\light\\'
-    path = "D:\\programLearning\\SchoolOfTheRobotTechnology\\ProjectDesign2\\TrafficLight-Detector-master\\TrafficLight-Detector-master\\light"
-    for f in os.listdir(path):
-        print (f)
-        if f.endswith('.jpg') or f.endswith('.JPG') or f.endswith('.png') or f.endswith('.PNG'):
-            detect(path, f)
 
+
+
+# if __name__ == '__main__':
+
+#     # path = os.path.abspath('..')+'\\light\\'
+#     path = "D:\\programLearning\\SchoolOfTheRobotTechnology\\ProjectDesign2\\TrafficLight-Detector-master\\TrafficLight-Detector-master\\light"
+#     for f in os.listdir(path):
+#         print (f)
+#         if f.endswith('.jpg') or f.endswith('.JPG') or f.endswith('.png') or f.endswith('.PNG'):
+#             detect(path, f)
